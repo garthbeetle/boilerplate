@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>GeoJSON editor</title>
+    
+    <script src='../third/leaflet-0.7.3/leaflet.js'></script>
+    <link rel="stylesheet" href="../third/leaflet-0.7.3/leaflet.css">
+    <script src='../third/leaflet.draw/leaflet.draw-src.js'></script>
+    <link rel="stylesheet" href="../third/leaflet.draw/leaflet.draw.css">
+
+    <script src='../third/ace-src-min-noconflict/ace.js'></script>
+    <link rel="stylesheet" href="../third/ace-src-min-noconflict/ace.">
+
+    <style>
+    html, body{
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+    }
+    
+    #map {
+        width: 70%;
+        height: 100%;
+    }
+    #editor {
+        position: absolute;
+        width: 30%;
+        height: 100%;
+        right: 0%;
+        top: 0%;
+    }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div id="editor"></div>
+    <script>
+
+    /* ------------------------
+    	map view
+    ------------------------ */
+
+    var baseLayer = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    });
+
+    map = new L.Map('map', {
+            layers: [baseLayer],
+            center: new L.LatLng(39.74739, -105),
+            zoom: 13
+        }),
+        drawnItems = L.featureGroup().addTo(map);
+
+    map.addControl(new L.Control.Draw({
+        edit: {
+            featureGroup: drawnItems
+        },
+        draw: {
+        	circle: false, // currently produces same geojson as marker
+        	rectangle: false // currently produces same geojson as polygon
+        }
+    }));
+
+    /* ------------------------
+    	map view listeners
+    ------------------------ */
+
+    map.on('draw:created', function(event) {
+        var layer = event.layer;
+        drawnItems.addLayer(layer);
+        set_model(drawnItems.toGeoJSON());
+        console.log('draw:created');
+    });
+
+    map.on('draw:edited', function(e) {
+    	// drawnItems already has edited version
+        // var layers = e.layers; 
+        console.log('draw:edited');
+        set_model(drawnItems.toGeoJSON());
+
+    });
+
+    map.on('draw:deleted', function(e) {
+        set_model(drawnItems.toGeoJSON());
+        console.log('draw:deleted');
+    });
+
+    /* ------------------------
+    	text editor view
+    ------------------------ */
+    var editor = ace.edit("editor");
+    editor.setTheme("ace/theme/monokai");
+    editor.getSession().setMode("ace/mode/javascript");
+
+    /* ------------------------
+    	text editor view listeners
+    ------------------------ */
+
+    function editor_change(e){
+    	// e.type, etc.
+
+    	var value = editor.getSession().getValue();
+    	if (value === '') { value = '{}'; }
+	    try{
+	    	console.log('changed', e.data);
+	    	set_model(JSON.parse(value, null, 2));
+	    }
+	    catch(err){
+	    	console.log("can't parse JSON");
+	    }
+    }
+
+    /* ------------------------
+    	the model
+    ------------------------ */
+
+    var model = {};
+
+    // only update the model using this function, to ensure views are updated
+    function set_model(collection){
+    	model.features = collection.features;
+
+    	// update map view
+    	drawnItems.clearLayers();
+	    model.features.forEach(function(feature){
+	    	var geoJsonLayer = L.geoJson(feature);
+	    	geoJsonLayer.getLayers()[0].addTo(drawnItems);
+	    });
+
+	    // update text editor view
+	    // it is necessary to turn termporarily off change listener because setValue triggers a change event
+	    editor.getSession().removeListener('change', editor_change);
+
+	    var stringified_model = JSON.stringify(model, null, 2);
+		editor.getSession().setValue(stringified_model);
+
+    	editor.getSession().on('change', editor_change)
+
+	    // document.getElementById('editor').innerHTML = JSON.stringify(model);
+    }
+
+
+    /* ------------------------
+    	initialise the model
+    ------------------------ */
+
+    set_model({
+        "type": "FeatureCollection",
+        "features": [{
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [-105.04371643066405, 39.73953436573085],
+                        [-105.02054214477539, 39.754580779257104],
+                        [-104.97196197509766, 39.72897351706311],
+                        [-105.01007080078125, 39.72197606377427],
+                        [-105.04371643066405, 39.73953436573085]
+                    ]
+                ]
+            }
+        }, {
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [-105.03238677978516, 39.760783168525926],
+                    [-104.9827766418457, 39.76500575223776],
+                    [-104.97711181640625, 39.75761606081634]
+                ]
+            }
+        }, {
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+                "type": "Point",
+                "coordinates": [-105.0564193725586, 39.73055774751369]
+            }
+        }]
+    });
+
+
+
+    </script>
+</body>
+
+</html>
